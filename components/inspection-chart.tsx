@@ -22,31 +22,24 @@ interface ChartData {
 export function InspectionChart() {
   const [data, setData] = useState<ChartData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     async function fetchChartData() {
       try {
+        setLoading(true)
+        setError(false)
         const response = await fetch("/api/dashboard/charts")
+        if (!response.ok) throw new Error('Failed to fetch')
         const chartData = await response.json()
         setData(chartData)
       } catch (error) {
         console.error("Error fetching chart data:", error)
-        // Mock data for development
+        setError(true)
+        // Set empty data structure
         setData({
-          daily: [
-            { date: "2024-01-15", approved: 45, rejected: 8, pending: 12 },
-            { date: "2024-01-16", approved: 52, rejected: 6, pending: 15 },
-            { date: "2024-01-17", approved: 38, rejected: 12, pending: 8 },
-            { date: "2024-01-18", approved: 61, rejected: 4, pending: 18 },
-            { date: "2024-01-19", approved: 48, rejected: 9, pending: 14 },
-            { date: "2024-01-20", approved: 55, rejected: 7, pending: 11 },
-            { date: "2024-01-21", approved: 42, rejected: 11, pending: 16 },
-          ],
-          status: [
-            { name: "Aprobadas", value: 341, color: "#22c55e" },
-            { name: "Rechazadas", value: 57, color: "#ef4444" },
-            { name: "Pendientes", value: 94, color: "#f59e0b" },
-          ],
+          daily: [],
+          status: []
         })
       } finally {
         setLoading(false)
@@ -59,85 +52,106 @@ export function InspectionChart() {
   if (loading) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Análisis de Inspecciones</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="animate-pulse bg-muted h-80 rounded" />
+        <CardContent className="p-6">
+          <div className="animate-pulse space-y-4">
+            <div className="h-6 bg-muted rounded w-1/3" />
+            <div className="h-64 bg-muted rounded" />
+          </div>
         </CardContent>
       </Card>
     )
   }
 
-  if (!data) return null
+  if (error || !data) {
+    return (
+      <Card>
+        <CardContent className="p-6 text-center">
+          <p className="text-muted-foreground">No se pudieron cargar los gráficos</p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Daily Inspections Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            Inspecciones por Día
-            <Badge variant="outline">Últimos 7 días</Badge>
-          </CardTitle>
+          <CardTitle className="text-lg font-semibold">Inspecciones Diarias</CardTitle>
+          <p className="text-sm text-muted-foreground">Últimos 7 días</p>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={data.daily}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis
-                dataKey="date"
-                tickFormatter={(value) =>
-                  new Date(value).toLocaleDateString("es-ES", {
-                    month: "short",
-                    day: "numeric",
-                  })
-                }
-              />
-              <YAxis />
-              <Tooltip labelFormatter={(value) => new Date(value).toLocaleDateString("es-ES")} />
-              <Bar dataKey="approved" stackId="a" fill="#22c55e" name="Aprobadas" />
-              <Bar dataKey="rejected" stackId="a" fill="#ef4444" name="Rechazadas" />
-              <Bar dataKey="pending" stackId="a" fill="#f59e0b" name="Pendientes" />
-            </BarChart>
-          </ResponsiveContainer>
+          {data.daily.length === 0 ? (
+            <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+              No hay datos disponibles
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={data.daily}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={(date) => new Date(date).toLocaleDateString('es', { month: 'short', day: 'numeric' })}
+                />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="approved" fill="#10b981" name="Aprobadas" />
+                <Bar dataKey="rejected" fill="#ef4444" name="Rechazadas" />
+                <Bar dataKey="pending" fill="#f59e0b" name="Pendientes" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </CardContent>
       </Card>
 
+      {/* Status Distribution Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Distribución de Estados</CardTitle>
+          <CardTitle className="text-lg font-semibold">Distribución de Estados</CardTitle>
+          <p className="text-sm text-muted-foreground">Estado actual de inspecciones</p>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between">
-            <ResponsiveContainer width="60%" height={200}>
-              <PieChart>
-                <Pie
-                  data={data.status}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={40}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {data.status.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-
-            <div className="space-y-2">
-              {data.status.map((item, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="text-sm font-medium">{item.name}</span>
-                  <span className="text-sm text-muted-foreground">({item.value})</span>
-                </div>
-              ))}
+          {data.status.length === 0 ? (
+            <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+              No hay datos disponibles
             </div>
-          </div>
+          ) : (
+            <>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={data.status}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(props: any) => {
+                      const { name, percent } = props;
+                      return `${name} ${(percent * 100).toFixed(0)}%`;
+                    }}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {data.status.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex justify-center space-x-4 mt-4">
+                {data.status.map((item, index) => (
+                  <Badge key={index} variant="outline" style={{ borderColor: item.color }}>
+                    <div 
+                      className="w-2 h-2 rounded-full mr-2" 
+                      style={{ backgroundColor: item.color }}
+                    />
+                    {item.name}: {item.value}
+                  </Badge>
+                ))}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

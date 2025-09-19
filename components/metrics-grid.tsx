@@ -21,15 +21,33 @@ interface DashboardMetrics {
 export function MetricsGrid() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     async function fetchMetrics() {
       try {
+        setLoading(true)
+        setError(false)
         const response = await fetch("/api/dashboard/metrics")
+        if (!response.ok) throw new Error('Failed to fetch')
         const data = await response.json()
         setMetrics(data)
       } catch (error) {
         console.error("Error fetching metrics:", error)
+        setError(true)
+        // Set empty metrics to prevent crashes
+        setMetrics({
+          totalVehicles: 0,
+          totalDrivers: 0,
+          todayInspections: 0,
+          pendingInspections: 0,
+          criticalAlerts: 0,
+          approvedInspections: 0,
+          rejectedInspections: 0,
+          fatigueAlerts: 0,
+          weeklyTrend: 0,
+          complianceRate: 0
+        })
       } finally {
         setLoading(false)
       }
@@ -56,7 +74,17 @@ export function MetricsGrid() {
     )
   }
 
-  if (!metrics) return null
+  if (error || !metrics) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="col-span-full">
+          <CardContent className="p-6 text-center">
+            <p className="text-muted-foreground">No se pudieron cargar las métricas</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   const metricCards = [
     {
@@ -67,7 +95,7 @@ export function MetricsGrid() {
       bgColor: "bg-blue-50",
     },
     {
-      title: "Conductores Activos",
+      title: "Conductores Activos", 
       value: metrics.totalDrivers,
       icon: Users,
       color: "text-green-600",
@@ -108,47 +136,45 @@ export function MetricsGrid() {
       icon: Shield,
       color: "text-orange-600",
       bgColor: "bg-orange-50",
-      badge: metrics.fatigueAlerts > 5 ? "Atención" : null,
+      badge: metrics.fatigueAlerts > 5 ? "Alto" : metrics.fatigueAlerts > 0 ? "Monitor" : null,
     },
     {
       title: "Cumplimiento",
       value: `${metrics.complianceRate}%`,
       icon: TrendingUp,
-      color: "text-blue-600",
-      bgColor: "bg-blue-50",
-      trend: metrics.weeklyTrend,
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-50",
+      badge: metrics.complianceRate > 90 ? "Excelente" : null,
     },
   ]
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      {metricCards.map((metric, index) => (
-        <Card key={index} className="relative overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">{metric.title}</CardTitle>
-            <div className={`p-2 rounded-lg ${metric.bgColor}`}>
-              <metric.icon className={`h-4 w-4 ${metric.color}`} />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <div className="text-2xl font-bold">{metric.value}</div>
+      {metricCards.map((metric, index) => {
+        const Icon = metric.icon
+        return (
+          <Card key={index} className="relative overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {metric.title}
+              </CardTitle>
+              <div className={`p-2 rounded-lg ${metric.bgColor}`}>
+                <Icon className={`h-4 w-4 ${metric.color}`} />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-foreground">
+                {metric.value}
+              </div>
               {metric.badge && (
-                <Badge variant="destructive" className="text-xs">
+                <Badge variant="secondary" className="mt-2 text-xs">
                   {metric.badge}
                 </Badge>
               )}
-              {metric.trend !== undefined && (
-                <div className={`flex items-center text-xs ${metric.trend >= 0 ? "text-green-600" : "text-red-600"}`}>
-                  <TrendingUp className="h-3 w-3 mr-1" />
-                  {metric.trend >= 0 ? "+" : ""}
-                  {metric.trend}%
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        )
+      })}
     </div>
   )
 }
