@@ -1,11 +1,21 @@
 // Configuración de base de datos PostgreSQL para el sistema de inspección vehicular
 import { neon } from "@neondatabase/serverless"
 
-// Configuración de conexión a Neon PostgreSQL
-const sql = neon(process.env.DATABASE_URL!)
+// Configuración de conexión a Neon PostgreSQL with build-time safety
+const sql = process.env.DATABASE_URL ? neon(process.env.DATABASE_URL) : null
+
+// Export the sql instance for use in API routes
+export { sql }
+
+// Export default sql instance (for compatibility)
+export default sql
 
 // Función para ejecutar consultas
 export async function query(text: string, params?: any[]) {
+  if (!sql) {
+    throw new Error("Database not configured")
+  }
+
   const start = Date.now()
 
   try {
@@ -24,13 +34,17 @@ export async function query(text: string, params?: any[]) {
 }
 
 export async function transaction(callback: (client: any) => Promise<any>) {
+  if (!sql) {
+    throw new Error("Database not configured")
+  }
+
   try {
-    await sql("BEGIN")
+    await sql`BEGIN`
     const result = await callback({ query: sql })
-    await sql("COMMIT")
+    await sql`COMMIT`
     return result
   } catch (error) {
-    await sql("ROLLBACK")
+    await sql`ROLLBACK`
     console.error("[DB Transaction Error]", error)
     throw error
   }
@@ -158,5 +172,3 @@ export const ELEMENTOS_INSPECCION = [
   { nombre: "KIT AMBIENTAL", critico: false },
   { nombre: "DOCUMENTACION DEL VEHICULO", critico: true },
 ]
-
-export default sql

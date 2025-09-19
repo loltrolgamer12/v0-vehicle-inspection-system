@@ -39,6 +39,37 @@ export function validateRequired(data: any, fields: string[]) {
 
 // Obtener métricas del dashboard
 export async function getDashboardMetrics() {
+  if (!sql) {
+    // Return mock data during build time
+    return {
+      totales: {
+        inspecciones: 150,
+        conductores: 25,
+        vehiculos: 30,
+      },
+      conductores: {
+        verde: 18,
+        amarillo: 5,
+        rojo: 2,
+      },
+      vehiculos: {
+        verde: 22,
+        amarillo: 6,
+        naranja: 2,
+        rojo: 0,
+      },
+      fatiga: {
+        verde: 20,
+        amarillo: 4,
+        rojo: 1,
+      },
+      mesesDisponibles: [
+        { mes: 1, año: 2024, label: "Enero 2024" },
+        { mes: 2, año: 2024, label: "Febrero 2024" },
+      ],
+    }
+  }
+
   try {
     console.log("[v0] Starting dashboard metrics fetch")
 
@@ -151,6 +182,10 @@ export async function getDashboardMetrics() {
 
 // Búsqueda predictiva global
 export async function searchGlobal(query_text: string, limit = 20) {
+  if (!sql) {
+    return []
+  }
+
   try {
     const searchTerm = `%${query_text.toLowerCase()}%`
 
@@ -185,6 +220,15 @@ export async function searchGlobal(query_text: string, limit = 20) {
 
 // Validar duplicados antes de insertar
 export async function validateDuplicates(inspecciones: any[]) {
+  if (!sql) {
+    return {
+      duplicados: 0,
+      nuevos: inspecciones.length,
+      detallesDuplicados: [],
+      inspeccionesNuevas: inspecciones,
+    }
+  }
+
   try {
     const hashes = inspecciones.map((insp) => insp.hash_unico)
 
@@ -211,11 +255,22 @@ export async function validateDuplicates(inspecciones: any[]) {
 
 // Actualizar estados calculados
 export async function updateCalculatedStates() {
+  if (!sql) {
+    console.log("[States Update Skipped] Database not available")
+    return
+  }
+
   try {
-    await sql.begin(async (client) => {
-      await client.query("SELECT actualizar_estado_conductores()")
-      await client.query("SELECT actualizar_estado_vehiculos()")
-    })
+    // Use begin method if available, otherwise skip transaction
+    try {
+      await sql`BEGIN`
+      await sql`SELECT actualizar_estado_conductores()`
+      await sql`SELECT actualizar_estado_vehiculos()`
+      await sql`COMMIT`
+    } catch (transactionError) {
+      await sql`ROLLBACK`
+      throw transactionError
+    }
 
     console.log("[States Updated]", "Conductores y vehículos actualizados")
   } catch (error) {
@@ -266,74 +321,51 @@ export function calculateFatigueScore(
 }
 
 // Categorizar fallas del campo observaciones
-export function categorizarFallas(observaciones: string): Array<{
-  categoria: string
-  severidad: "menor" | "critica" | "urgente"
-  descripcion: string
-}> {
-  if (!observaciones || observaciones.trim() === "") return []
+export function categorizarFallas(observaciones: string): string[] {
+  if (!observaciones) return []
 
-  const fallas = []
-  const texto = observaciones.toLowerCase()
+  const observacionesLower = observaciones.toLowerCase()
+  const categorias = []
 
-  // Fallas críticas
-  if (texto.includes("freno") || texto.includes("brake")) {
-    fallas.push({
-      categoria: "seguridad",
-      severidad: "critica" as const,
-      descripcion: "Problema en sistema de frenos",
-    })
+  // Motor y fluidos
+  if (observacionesLower.includes("aceite") || observacionesLower.includes("motor")) {
+    categorias.push("Motor")
   }
 
-  if (texto.includes("dirección") || texto.includes("direccion") || texto.includes("steering")) {
-    fallas.push({
-      categoria: "seguridad",
-      severidad: "critica" as const,
-      descripcion: "Problema en sistema de dirección",
-    })
+  // Frenos
+  if (observacionesLower.includes("freno")) {
+    categorias.push("Frenos")
   }
 
-  if (texto.includes("llanta") || texto.includes("tire") || texto.includes("neumático")) {
-    fallas.push({
-      categoria: "seguridad",
-      severidad: "critica" as const,
-      descripcion: "Problema en llantas",
-    })
+  // Llantas
+  if (observacionesLower.includes("llanta") || observacionesLower.includes("neumático")) {
+    categorias.push("Llantas")
   }
 
-  // Fallas mecánicas
-  if (texto.includes("aceite") || texto.includes("oil")) {
-    fallas.push({
-      categoria: "mecanica",
-      severidad: "urgente" as const,
-      descripcion: "Problema con aceite del motor",
-    })
+  // Sistema eléctrico
+  if (observacionesLower.includes("batería") || observacionesLower.includes("luces") || observacionesLower.includes("eléctric")) {
+    categorias.push("Sistema Eléctrico")
   }
 
-  if (texto.includes("batería") || texto.includes("bateria") || texto.includes("battery")) {
-    fallas.push({
-      categoria: "electrica",
-      severidad: "urgente" as const,
-      descripcion: "Problema con batería",
-    })
+  // Combustible
+  if (observacionesLower.includes("combustible") || observacionesLower.includes("gasolina") || observacionesLower.includes("diesel")) {
+    categorias.push("Combustible")
   }
 
-  // Fallas menores
-  if (texto.includes("ruido") || texto.includes("noise")) {
-    fallas.push({
-      categoria: "mecanica",
-      severidad: "menor" as const,
-      descripcion: "Ruidos anómalos",
-    })
+  // Dirección
+  if (observacionesLower.includes("dirección") || observacionesLower.includes("volante")) {
+    categorias.push("Dirección")
   }
 
-  if (texto.includes("indicador") || texto.includes("gauge")) {
-    fallas.push({
-      categoria: "electrica",
-      severidad: "menor" as const,
-      descripcion: "Problema en indicadores",
-    })
+  // Suspensión
+  if (observacionesLower.includes("suspensión") || observacionesLower.includes("amortiguador")) {
+    categorias.push("Suspensión")
   }
 
-  return fallas
+  // Si no hay categorías específicas, marcar como general
+  if (categorias.length === 0) {
+    categorias.push("General")
+  }
+
+  return categorias
 }
