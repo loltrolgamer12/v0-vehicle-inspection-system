@@ -1,12 +1,24 @@
-// API para obtener métricas del dashboard ejecutivo
-import type { NextRequest } from "next/server"
-import { apiResponse, apiError, getDashboardMetrics } from "@/lib/api-helpers"
+import { NextResponse } from "next/server"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const metrics = await getDashboardMetrics()
-    return apiResponse(metrics, 200, "Métricas obtenidas exitosamente")
-  } catch (error: any) {
-    return apiError("Error al obtener métricas del dashboard", 500, error.message)
+    // Respuesta inmediata sin ninguna conexión a base de datos
+    const emptyMetrics = {
+      totalVehicles: 0,
+      totalDrivers: 0,
+      todayInspections: 0,
+      pendingInspections: 0,
+      criticalAlerts: 0,
+      approvedInspections: 0,
+      rejectedInspections: 0,
+      fatigueAlerts: 0,
+      weeklyTrend: 0,
+      complianceRate: 0
+    }
+    
+    return NextResponse.json(emptyMetrics)
+  } catch (error) {
+    console.error("Error in metrics route:", error)
+    return NextResponse.json({ error: "Error fetching metrics" }, { status: 500 })
   }
 }
